@@ -3,35 +3,36 @@
 set -euo pipefail
 
 TOOL_NAME="git-crypt"
+TOOL_REPO="AGWA/git-crypt"
 BINARY_NAME="git-crypt"
 
-fail() {
-  echo -e "\e[31mFail:\e[m $*" >&2
-  exit 1
-}
+fail() { echo -e "\e[31mFail:\e[m $*" >&2; exit 1; }
 
 list_all_versions() {
-  curl -sL "https://api.github.com/repos/AGWA/git-crypt/releases" 2>/dev/null | jq -r '.[].tag_name // empty' 2>/dev/null | sed 's/^v//' | sort -V
+  local curl_opts=(-sL)
+  [[ -n "${GITHUB_TOKEN:-}" ]] && curl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
+  curl "${curl_opts[@]}" "https://api.github.com/repos/$TOOL_REPO/tags" 2>/dev/null | \
+    grep -o '"name": "[^"]*"' | sed 's/"name": "//' | sed 's/"$//' | sort -V
 }
 
 download_release() {
-  local version="$1"
-  local download_path="$2"
-  mkdir -p "$download_path"
-  echo "$version" > "$download_path/VERSION"
-  echo "Source compilation required for $TOOL_NAME $version"
+  local version="$1" download_path="$2"
+  local url="https://github.com/$TOOL_REPO/archive/refs/tags/${version}.tar.gz"
+  local archive="$download_path/git-crypt.tar.gz"
+
+  echo "Downloading git-crypt $version source..."
+  curl -fsSL "$url" -o "$archive" || fail "Download failed"
+  tar -xzf "$archive" -C "$download_path" --strip-components=1
+
+  echo "Compiling git-crypt..."
+  cd "$download_path"
+  make || fail "Compilation failed. Install dependencies: openssl-devel"
+  rm -f "$archive"
 }
 
 install_version() {
-  local version="$1"
-  local install_path="$2"
-  echo "Source compilation for $TOOL_NAME is not yet implemented"
-  echo "Please install $TOOL_NAME $version manually"
+  local install_type="$1" version="$2" install_path="$3"
   mkdir -p "$install_path/bin"
-  cat > "$install_path/bin/$BINARY_NAME" << SCRIPT
-#!/usr/bin/env bash
-echo "$TOOL_NAME $version - source compilation required"
-exit 1
-SCRIPT
-  chmod +x "$install_path/bin/$BINARY_NAME"
+  cp "$ASDF_DOWNLOAD_PATH/git-crypt" "$install_path/bin/"
+  chmod +x "$install_path/bin/git-crypt"
 }
